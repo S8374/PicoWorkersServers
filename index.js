@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 const SSLCommerzPayment = require("sslcommerz-lts");
 const jwt = require("jsonwebtoken");
 // Middleware
@@ -29,11 +29,13 @@ async function run() {
   try {
     // await client.connect();
 
-    const userCollection = client.db("PicoWorkerDB").collection("users");
-    const taskCollection = client.db("PicoWorkerDB").collection("tasks");
-    const coinsCollection = client.db("PicoWorkerDB").collection("coins");
-    const withDrawCollection = client.db("PicoWorkerDB").collection("withDraw");
-    const paymentCollection = client.db("PicoWorkerDB").collection("payMent");
+    const userCollection = client.db("PicoWorkerDB2").collection("users");
+    const taskCollection = client.db("PicoWorkerDB2").collection("tasks");
+    const coinsCollection = client.db("PicoWorkerDB2").collection("coins");
+    const withDrawCollection = client
+      .db("PicoWorkerDB2")
+      .collection("withDraw");
+    const paymentCollection = client.db("PicoWorkerDB2").collection("payMent");
 
     // SSLCommerz payment gateway instance
     // const tran_id = new ObjectId().toString();
@@ -41,20 +43,23 @@ async function run() {
     // jwt related api
     app.post("/jwt", (req, res) => {
       const user = req.body;
-      const token = jwt.sign({ email: user.email }, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
-      });
+      const token = jwt.sign(
+        { email: user.email },
+        process.env.ACCESS_TOKEN_SECRET,
+        {
+          expiresIn: "1h",
+        }
+      );
       res.send({ token });
     });
-    
 
     const verifyToken = (req, res, next) => {
       console.log("Authorization Header:", req.headers.authorization);
-    
+
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "Unauthorized access" });
       }
-    
+
       const token = req.headers.authorization.split(" ")[1];
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
@@ -66,7 +71,6 @@ async function run() {
         next();
       });
     };
-    
 
     //verify admin
     const verifyAdmin = async (req, res, next) => {
@@ -74,41 +78,50 @@ async function run() {
       if (!email) {
         return res.status(400).send({ message: "Invalid token data" });
       }
-    
+
       const user = await userCollection.findOne({ email });
       if (user?.role !== "admin") {
         return res.status(403).send({ message: "Forbidden access" });
       }
-    
+
       next();
     };
-    
-    // Insert a new user
+
+    // Get user role by email
+
+    // Add or update user
     app.post("/users", async (req, res) => {
       const newUser = req.body;
+      console.log(newUser);
 
-      // Check if the email already exists
-      const existingUser = await userCollection.findOne({
-        email: newUser.email,
-      });
+      try {
+        const existingUser = await userCollection.findOne({
+          email: newUser.email,
+        });
 
-      if (existingUser) {
-        return res.status(400).send({ message: "Email is already in use." });
+        if (existingUser) {
+          return res.status(400).send({ message: "Email is already in use." });
+        }
+        const result = await userCollection.insertOne(newUser);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Internal server error" });
       }
-
-      // If the email does not exist, create the new user
-      const result = await userCollection.insertOne(newUser);
-      res.send(result);
     });
 
-    // Get users data
+    // Get all users
+
     app.get("/users", async (req, res) => {
-      const users = await userCollection.find().toArray();
-      res.send(users);
+      try {
+        const users = await userCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        res.status(500).send({ message: "Internal server error" });
+      }
     });
 
     // Route to delete user
-    app.delete("/users/:id",async (req, res) => {
+    app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
 
@@ -242,9 +255,20 @@ async function run() {
       const result = await userCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
+    app.patch("/users/admin/:id", async (req, res) => {
+      const { id } = req.params;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
 
     // Route to update user role to Admin
-    app.get("/users/admin/:email",async (req, res) => {
+    app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne({ email });
 
@@ -359,10 +383,10 @@ async function run() {
           total_amount: payment.coinPrice,
           currency: "BDT",
           tran_id: tran_id,
-          success_url: `http://localhost:3000/payment/success/${tran_id}`, // Server URL
-          fail_url: "http://localhost:3000/fail",
-          cancel_url: "http://localhost:3000/cancel",
-          ipn_url: "http://localhost:3000/ipn",
+          success_url: `http://localhost:5000/payment/success/${tran_id}`, // Server URL
+          fail_url: "http://localhost:5000/fail",
+          cancel_url: "http://localhost:5000/cancel",
+          ipn_url: "http://localhost:5000/ipn",
           shipping_method: "Courier",
           product_name: payment.coinTitle,
           product_category: "Electronic",
@@ -413,7 +437,7 @@ async function run() {
       }
     });
 
-    app.get("/payments",async (req, res) => {
+    app.get("/payments", async (req, res) => {
       try {
         const payments = await paymentCollection.find().toArray();
         res.send(payments);
