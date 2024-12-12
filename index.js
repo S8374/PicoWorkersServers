@@ -6,7 +6,11 @@ const port = process.env.PORT || 5000;
 const SSLCommerzPayment = require("sslcommerz-lts");
 const jwt = require("jsonwebtoken");
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["https://picowokers2-91495.web.app", "picowokers2-91495.web.app"],
+  })
+);
 app.use(express.json());
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
